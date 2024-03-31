@@ -847,13 +847,13 @@ persistence:
   # -- Enable persistence using Persistent Volume Claims
   # ref: http://kubernetes.io/docs/user-guide/persistent-volumes/
   # It can be used to store TLS certificates, see `storage` in certResolvers
-  enabled: false
+  enabled: true
   name: data
   #  existingClaim: ""
-  accessMode: ReadWriteOnce
+  accessMode: ReadWriteMany
   size: 128Mi
-  # storageClass: ""
-  # volumeName: ""
+  storageClass: "nfs-csi-traefik"
+  volumeName: "pi8s-nfs-csi-traefik-pvc"
   path: /data
   annotations: {}
   # -- Only mount a subpath of the Volume into the pod

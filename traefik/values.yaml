@@ -155,37 +155,21 @@ ingressRoute:
     # -- Additional ingressRoute labels (e.g. for filtering IngressRoute by custom labels)
     labels: {}
     # -- The router match rule used for the dashboard ingressRoute
-    matchRule: Host(`dashboard-traefik.lair.pangarabbit.com`) && PathPrefix(`/dashboard`) || PathPrefix(`/api`)
+    matchRule: Host(`dashboard-traefik.lair.pangarabbit.com`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
     # -- Specify the allowed entrypoints to use for the dashboard ingress route, (e.g. traefik, web, websecure).
     # By default, it's using traefik entrypoint, which is not exposed.
     # /!\ Do not expose your dashboard without any protection over the internet /!\
-    entryPoints: ["traefik"]
+    entryPoints:
+      - web
+      - websecure
+      - traefik
     # -- Additional ingressRoute middlewares (e.g. for authentication)
-    middlewares:
+    middlewares: []
     # -- TLS options (e.g. secret containing certificate)
-    - name: traefik-dashboard-auth
-  extraObjects:
-  - apiVersion: v1
-    kind: Secret
-    metadata:
-      name: traefik-dashboard-auth-secret
-    type: kubernetes.io/basic-auth
-    stringData:
-      username: admin
-      password: admin
-
-  - apiVersion: traefik.io/v1alpha1
-    kind: Middleware
-    metadata:
-      name: traefik-dashboard-auth
-    spec:
-      basicAuth:
-        secret: traefik-dashboard-auth-secret
     tls: {}
-
   healthcheck:
     # -- Create an IngressRoute for the healthcheck probe
-    enabled: false
+    enabled: true
     # -- Additional ingressRoute annotations (e.g. for kubernetes.io/ingress.class)
     annotations: {}
     # -- Additional ingressRoute labels (e.g. for filtering IngressRoute by custom labels)
@@ -194,7 +178,10 @@ ingressRoute:
     matchRule: PathPrefix(`/ping`)
     # -- Specify the allowed entrypoints to use for the healthcheck ingress route, (e.g. traefik, web, websecure).
     # By default, it's using traefik entrypoint, which is not exposed.
-    entryPoints: ["traefik"]
+    entryPoints:
+    - traefik
+    - web
+    - websecure
     # -- Additional ingressRoute middlewares (e.g. for authentication)
     middlewares: []
     # -- TLS options (e.g. secret containing certificate)
@@ -261,7 +248,7 @@ providers:
     # -- Load Kubernetes Ingress provider
     enabled: true
     # -- Allows to reference ExternalName services in Ingress
-    allowExternalNameServices: false
+    allowExternalNameServices: true
     # -- Allows to return 503 when there is no endpoints available
     allowEmptyServices: false
     # ingressClass: traefik-internal
@@ -269,9 +256,6 @@ providers:
     # -- Array of namespaces to watch. If left empty, Traefik watches all namespaces.
     namespaces: []
     # - "default"
-    # Disable cluster IngressClass Lookup - Requires Traefik V3.
-    # When combined with rbac.namespaced: true, ClusterRole will not be created and ingresses must use kubernetes.io/ingress.class annotation instead of spec.ingressClassName.
-    disableIngressClassLookup: false
     # IP used for Kubernetes Ingress endpoints
     publishedService:
       enabled: false
@@ -285,7 +269,8 @@ providers:
     # -- Allows Traefik to automatically watch for file changes
     watch: true
     # -- File content (YAML format, go template supported) (see https://doc.traefik.io/traefik/providers/file/)
-    content: ""
+    content:
+      ""
       # http:
       #   routers:
       #     router0:
@@ -325,10 +310,10 @@ logs:
     # format: json
     # By default, the level is set to ERROR.
     # -- Alternative logging levels are DEBUG, PANIC, FATAL, ERROR, WARN, and INFO.
-    level: ERROR
+    level: DEBUG
   access:
     # -- To enable access logs
-    enabled: false
+    enabled: true
     ## By default, logs are written using the Common Log Format (CLF) on stdout.
     ## To write logs in JSON, use json in the format option.
     ## If the given format is unsupported, the default (CLF) is used instead.
@@ -588,27 +573,26 @@ tracing: {}
 
 # -- Global command arguments to be passed to all traefik's pods
 globalArguments:
-- "--global.checknewversion"
-
-#
+  - "--global.checknewversion"
+  - "--log.level=DEBUG"
+  - "--api.insecure=true"
 # Configure Traefik static configuration
 # -- Additional arguments to be passed at Traefik's binary
 # All available options available on https://docs.traefik.io/reference/static-configuration/cli/
 ## Use curly braces to pass values: `helm install --set="additionalArguments={--providers.kubernetesingress.ingressclass=traefik-internal,--log.level=DEBUG}"`
-additionalArguments: []
-#  - "--providers.kubernetesingress.ingressclass=traefik-internal"
-#  - "--log.level=DEBUG"
+#additionalArguments:
+  #  - "--providers.kubernetesingress.ingressclass=traefik-internal"
 
 # -- Environment variables to be passed to Traefik's binary
 env:
-- name: POD_NAME
-  valueFrom:
-    fieldRef:
-      fieldPath: metadata.name
-- name: POD_NAMESPACE
-  valueFrom:
-    fieldRef:
-      fieldPath: metadata.namespace
+  - name: POD_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.name
+  - name: POD_NAMESPACE
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.namespace
 # - name: SOME_VAR
 #   value: some-var-value
 # - name: SOME_VAR_FROM_CONFIG_MAP
@@ -647,20 +631,22 @@ ports:
     # -- You SHOULD NOT expose the traefik port on production deployments.
     # If you want to access it from outside your cluster,
     # use `kubectl port-forward` or create a secure ingress
-    expose:
-      default: false
+    expose: false
     # -- The exposed port for this service
     exposedPort: 9000
     # -- The port protocol (TCP/UDP)
     protocol: TCP
+    # -- Defines whether the port is exposed on the internal service;
+    # note that ports exposed on the default service are exposed on the internal
+    # service by default as well.
+    exposeInternal: false
   web:
     ## -- Enable this entrypoint as a default entrypoint. When a service doesn't explicitly set an entrypoint it will only use this entrypoint.
     # asDefault: true
     port: 8000
     # hostPort: 8000
     # containerPort: 8000
-    expose:
-      default: true
+    expose: true
     exposedPort: 80
     ## -- Different target traefik port on the cluster, useful for IP type LB
     # targetPort: 80
@@ -669,6 +655,10 @@ ports:
     # -- Use nodeport if set. This is useful if you have configured Traefik in a
     # LoadBalancer.
     # nodePort: 32080
+    # -- Defines whether the port is exposed on the internal service;
+    # note that ports exposed on the default service are exposed on the internal
+    # service by default as well.
+    exposeInternal: false
     # Port Redirections
     # Added in 2.2, you can make permanent redirects via entrypoints.
     # https://docs.traefik.io/routing/entrypoints/#redirection
@@ -692,14 +682,17 @@ ports:
     port: 8443
     # hostPort: 8443
     # containerPort: 8443
-    expose:
-      default: true
+    expose: true
     exposedPort: 443
     ## -- Different target traefik port on the cluster, useful for IP type LB
     # targetPort: 80
     ## -- The port protocol (TCP/UDP)
     protocol: TCP
     # nodePort: 32443
+    # -- Defines whether the port is exposed on the internal service;
+    # note that ports exposed on the default service are exposed on the internal
+    # service by default as well.
+    exposeInternal: false
     ## -- Specify an application protocol. This may be used as a hint for a Layer 7 load balancer.
     # appProtocol: https
     #
@@ -756,12 +749,15 @@ ports:
     # -- You may not want to expose the metrics port on production deployments.
     # If you want to access it from outside your cluster,
     # use `kubectl port-forward` or create a secure ingress
-    expose:
-      default: false
+    expose: false
     # -- The exposed port for this service
     exposedPort: 9100
     # -- The port protocol (TCP/UDP)
     protocol: TCP
+    # -- Defines whether the port is exposed on the internal service;
+    # note that ports exposed on the default service are exposed on the internal
+    # service by default as well.
+    exposeInternal: false
 
 # -- TLS Options are created as TLSOption CRDs
 # https://doc.traefik.io/traefik/https/tls/#tls-options
@@ -813,7 +809,7 @@ service:
   # - 172.16.0.0/16
   ## -- Class of the load balancer implementation
   # loadBalancerClass: service.k8s.aws/nlb
-  externalIPs: {}
+  externalIPs: []
   # - 1.2.3.4
   ## One of SingleStack, PreferDualStack, or RequireDualStack.
   # ipFamilyPolicy: SingleStack
@@ -823,7 +819,6 @@ service:
   #   - IPv4
   #   - IPv6
   ##
-  additionalServices: {}
   ## -- An additional and optional internal Service.
   ## Same parameters as external Service
   # internal:
@@ -865,13 +860,13 @@ persistence:
   # -- Enable persistence using Persistent Volume Claims
   # ref: http://kubernetes.io/docs/user-guide/persistent-volumes/
   # It can be used to store TLS certificates, see `storage` in certResolvers
-  enabled: true
+  enabled: false
   name: data
   #  existingClaim: ""
-  accessMode: ReadWriteMany
+  accessMode: ReadWriteOnce
   size: 128Mi
-  storageClass: "nfs-csi-traefik"
-  volumeName: "pi8s-nfs-csi-traefik-pvc"
+  # storageClass: ""
+  # volumeName: ""
   path: /data
   annotations: {}
   # -- Only mount a subpath of the Volume into the pod
@@ -909,8 +904,7 @@ hostNetwork: false
 rbac:
   enabled: true
   # If set to false, installs ClusterRole and ClusterRoleBinding so Traefik can be used across namespaces.
-  # If set to true, installs Role and RoleBinding instead of ClusterRole/ClusterRoleBinding. Providers will only watch target namespace.
-  # When combined with providers.kubernetesIngress.disableIngressClassLookup: true and Traefik V3, ClusterRole to watch IngressClass is also disabled.
+  # If set to true, installs Role and RoleBinding. Providers will only watch target namespace.
   namespaced: false
   # Enable user-facing roles
   # https://kubernetes.io/docs/reference/access-authn-authz/rbac/#user-facing-roles
@@ -998,7 +992,6 @@ podSecurityContext:
 # In some cases, it can avoid the need for additional, extended or adhoc deployments.
 # See #595 for more details and traefik/tests/values/extra.yaml for example.
 extraObjects: []
-
 # This will override the default Release Namespace for Helm.
 # It will not affect optional CRDs such as `ServiceMonitor` and `PrometheusRules`
 # namespaceOverride: traefik

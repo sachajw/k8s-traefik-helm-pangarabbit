@@ -10,7 +10,7 @@ spec:
     - web
     - websecure
   routes:
-    - match: Host(`traefik.pangarabbit.com`)
+    - match: Host(`traefik.pangarabbit.com`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))
       kind: Rule
       services:
         - name: api@internal

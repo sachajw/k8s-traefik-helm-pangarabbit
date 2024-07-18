@@ -15,5 +15,33 @@ spec:
       services:
         - name: api@internal
           kind: TraefikService
-
+---
+# argcd
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: argocd-server
+  namespace: argocd
+spec:
+  entryPoints:
+    - web
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`argocd.pangarabbit.com`)
+      priority: 10
+      services:
+        - name: argocd-server
+          namespace: argocd
+          port: 80
+    - kind: Rule
+      match: Host(`argocd.pangarabbit.com`) && Headers(`Content-Type`, `application/grpc`)
+      priority: 11
+      services:
+        - name: argocd-server
+          namespace: argocd
+          port: 80
+          scheme: h2c
+  tls:
+    certResolver: default
 ---

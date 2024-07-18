@@ -493,13 +493,26 @@
            {{- end }}
           {{- end }}
           {{- if .Values.experimental.kubernetesGateway.enabled }}
-          - "--providers.kubernetesgateway"
           - "--experimental.kubernetesgateway"
           {{- end }}
           {{- with .Values.providers.kubernetesCRD }}
           {{- if (and .enabled (or .namespaces (and $.Values.rbac.enabled $.Values.rbac.namespaced))) }}
           - "--providers.kubernetescrd.namespaces={{ template "providers.kubernetesCRD.namespaces" $ }}"
           {{- end }}
+          {{- end }}
+          {{- with .Values.providers.kubernetesGateway }}
+           {{- if .enabled }}
+          - "--providers.kubernetesgateway"
+            {{- if or .namespaces (and $.Values.rbac.enabled $.Values.rbac.namespaced) }}
+          - "--providers.kubernetesgateway.namespaces={{ template "providers.kubernetesGateway.namespaces" $ }}"
+            {{- end }}
+            {{- if .experimentalChannel }}
+          - "--providers.kubernetesgateway.experimentalchannel=true"
+            {{- end }}
+            {{- with .labelselector }}
+          - "--providers.kubernetesgateway.labelselector={{ . }}"
+            {{- end }}
+           {{- end }}
           {{- end }}
           {{- with .Values.providers.kubernetesIngress }}
           {{- if (and .enabled (or .namespaces (and $.Values.rbac.enabled $.Values.rbac.namespaced))) }}
@@ -608,46 +621,58 @@
           {{- end }}
           {{- end }}
           {{- with .Values.logs }}
-          {{- if .general.format }}
+            {{- if and .general.format (not (has .general.format (list "common" "json"))) }}
+              {{- fail "ERROR: .Values.logs.general.format must be either common or json"  }}
+            {{- end }}
+            {{- if .general.format }}
           - "--log.format={{ .general.format }}"
-          {{- end }}
-          {{- if ne .general.level "ERROR" }}
+            {{- end }}
+            {{- if .general.filePath }}
+          - "--log.filePath={{ .general.filePath }}"
+            {{- end }}
+            {{- if and (or (eq .general.format "common") (not .general.format)) (eq .general.noColor true) }}
+          - "--log.noColor={{ .general.noColor }}"
+            {{- end }}
+            {{- if and .general.level (not (has (.general.level | upper) (list "DEBUG" "PANIC" "FATAL" "ERROR" "WARN" "INFO"))) }}
+              {{- fail "ERROR: .Values.logs.level must be DEBUG, PANIC, FATAL, ERROR, WARN, and INFO"  }}
+            {{- end }}
+            {{- if .general.level }}
           - "--log.level={{ .general.level | upper }}"
-          {{- end }}
-          {{- if .access.enabled }}
+            {{- end }}
+            {{- if .access.enabled }}
           - "--accesslog=true"
-           {{- with .access.format }}
+              {{- with .access.format }}
           - "--accesslog.format={{ . }}"
-           {{- end }}
-           {{- with .access.filePath }}
+              {{- end }}
+              {{- with .access.filePath }}
           - "--accesslog.filepath={{ . }}"
-           {{- end }}
-           {{- if .access.addInternals }}
+              {{- end }}
+              {{- if .access.addInternals }}
           - "--accesslog.addinternals"
-           {{- end }}
-           {{- with .access.bufferingSize }}
+              {{- end }}
+              {{- with .access.bufferingSize }}
           - "--accesslog.bufferingsize={{ . }}"
-           {{- end }}
-           {{- with .access.filters }}
-            {{- with .statuscodes }}
+              {{- end }}
+              {{- with .access.filters }}
+                {{- with .statuscodes }}
           - "--accesslog.filters.statuscodes={{ . }}"
-            {{- end }}
-            {{- if .retryattempts }}
+                {{- end }}
+                {{- if .retryattempts }}
           - "--accesslog.filters.retryattempts"
-            {{- end }}
-            {{- with .minduration }}
+                {{- end }}
+                {{- with .minduration }}
           - "--accesslog.filters.minduration={{ . }}"
-            {{- end }}
-           {{- end }}
+                {{- end }}
+              {{- end }}
           - "--accesslog.fields.defaultmode={{ .access.fields.general.defaultmode }}"
-           {{- range $fieldname, $fieldaction := .access.fields.general.names }}
+              {{- range $fieldname, $fieldaction := .access.fields.general.names }}
           - "--accesslog.fields.names.{{ $fieldname }}={{ $fieldaction }}"
-           {{- end }}
+              {{- end }}
           - "--accesslog.fields.headers.defaultmode={{ .access.fields.headers.defaultmode }}"
-           {{- range $fieldname, $fieldaction := .access.fields.headers.names }}
+              {{- range $fieldname, $fieldaction := .access.fields.headers.names }}
           - "--accesslog.fields.headers.names.{{ $fieldname }}={{ $fieldaction }}"
-           {{- end }}
-          {{- end }}
+              {{- end }}
+            {{- end }}
           {{- end }}
           {{- range $resolver, $config := $.Values.certResolvers }}
           {{- range $option, $setting := $config }}

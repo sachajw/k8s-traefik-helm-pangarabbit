@@ -1,6 +1,7 @@
+{{- $version := include "imageVersion" $ }}
 {{- if .Values.rbac.enabled }}
 {{- if or
-       (semverCompare ">=v3.1.0-0" (.Values.image.tag | default .Chart.AppVersion))
+       (semverCompare ">=v3.1.0-0" $version)
        (not .Values.rbac.namespaced)
        (and .Values.rbac.namespaced .Values.providers.kubernetesIngress.enabled (not .Values.providers.kubernetesIngress.disableIngressClassLookup))
 }}
@@ -15,7 +16,7 @@ metadata:
     rbac.authorization.k8s.io/aggregate-to-{{ . }}: "true"
     {{- end }}
 rules:
-  {{- if semverCompare ">=v3.1.0-0" (.Values.image.tag | default .Chart.AppVersion) }}
+  {{- if semverCompare ">=v3.1.0-0" $version }}
   - apiGroups:
       - ""
     resources:
@@ -37,8 +38,31 @@ rules:
       - get
       - list
       - watch
+{{- if (.Values.providers.kubernetesGateway).enabled }}
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - list
+      - watch
+  - apiGroups:
+      - gateway.networking.k8s.io
+    resources:
+      - gatewayclasses
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - gateway.networking.k8s.io
+    resources:
+      - gatewayclasses/status
+    verbs:
+      - update
+{{- end }}
 {{- if not .Values.rbac.namespaced }}
-  {{- if (semverCompare "<v3.1.0" (.Values.image.tag | default .Chart.AppVersion)) }}
+  {{- if (semverCompare "<v3.1.0-0" $version) }}
   - apiGroups:
       - ""
     resources:
@@ -48,6 +72,16 @@ rules:
       - get
       - list
       - watch
+    {{- if $.Values.hub.token }}
+  - apiGroups:
+      - discovery.k8s.io
+    resources:
+      - endpointslices
+    verbs:
+      - get
+      - list
+      - watch
+    {{- end }}
   {{- else }}
   - apiGroups:
       - ""
@@ -63,9 +97,6 @@ rules:
     resources:
       - endpointslices
     verbs:
-    {{- if $.Values.hub.token }}
-      - get
-    {{- end }}
       - list
       - watch
   {{- end }}
@@ -74,7 +105,7 @@ rules:
     resources:
       - secrets
     {{- with .Values.rbac.secretResourceNames }}
-    resourceNames: {{ toYaml . |nindent 6 }}
+    resourceNames: {{ toYaml . | nindent 6 }}
     {{- end }}
     verbs:
       - get
@@ -118,18 +149,31 @@ rules:
     verbs:
       - use
 {{- end -}}
-{{- if .Values.experimental.kubernetesGateway.enabled }}
+{{- if .Values.providers.kubernetesGateway.enabled }}
   - apiGroups:
       - ""
     resources:
-      - namespaces
+      - services
+{{- if (semverCompare "<v3.1.0-0" $version) }}
+      - endpoints
+{{- end }}
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
+{{- if (semverCompare ">=v3.1.0-0" $version) }}
+  - apiGroups:
+      - discovery.k8s.io
+    resources:
+      - endpointslices
     verbs:
       - list
       - watch
+{{- end }}
   - apiGroups:
       - gateway.networking.k8s.io
     resources:
-      - gatewayclasses
       - gateways
       - httproutes
       - referencegrants
@@ -142,7 +186,6 @@ rules:
   - apiGroups:
       - gateway.networking.k8s.io
     resources:
-      - gatewayclasses/status
       - gateways/status
       - httproutes/status
       - tcproutes/status

@@ -9,7 +9,7 @@ spec:
   project: pangarabbit
   source:
     repoURL: "https://traefik.github.io/charts"
-    targetRevision: 29.0.1
+    targetRevision: HEAD
     chart: traefik
     helm:
       valueFiles:
